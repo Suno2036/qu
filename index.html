@@ -116,7 +116,7 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Main script
@@ -135,9 +135,10 @@
             let db;
             let auth;
             let userId;
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-            // Initialize Firebase with your keys
-            const firebaseConfig = {
+            // Use the environment-provided Firebase config if available, otherwise use the hardcoded one
+            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
               apiKey: "AIzaSyBojX_FBhea41ITHrheVaQFucPyn2r6gS4",
               authDomain: "svadba-31c48.firebaseapp.com",
               projectId: "svadba-31c48",
@@ -152,9 +153,14 @@
             auth = getAuth(app);
 
             try {
-                const userCredential = await signInAnonymously(auth);
-                userId = userCredential.user.uid;
-                console.log("Firebase signed in anonymously. User ID:", userId);
+                // Use the custom token if available, otherwise sign in anonymously
+                if (typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                userId = auth.currentUser.uid;
+                console.log("Firebase signed in. User ID:", userId);
                 setupPhotoListener();
             } catch (e) {
                 console.error("Firebase auth error:", e);
@@ -262,7 +268,7 @@
 
                 try {
                     // Save photo to Firestore database
-                    const photosRef = collection(db, `wedding-photos`);
+                    const photosRef = collection(db, `artifacts/${appId}/public/data/wedding-photos`);
                     await addDoc(photosRef, {
                         photoData: imageDataUrl,
                         timestamp: new Date().toISOString(),
@@ -278,7 +284,7 @@
             
             // Set up listener to display photos in real-time
             function setupPhotoListener() {
-                const photosRef = collection(db, `wedding-photos`);
+                const photosRef = collection(db, `artifacts/${appId}/public/data/wedding-photos`);
                 const q = query(photosRef, limit(10)); // Display the 10 most recent photos
             
                 // We sort the data on the client side since orderBy may require an index
