@@ -120,9 +120,8 @@
         import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Основной скрипт
         document.addEventListener('DOMContentLoaded', () => {
-            // Элементы пользовательского интерфейса
+            // Элементы UI
             const splashScreen = document.getElementById('splash-screen');
             const mainAppContent = document.getElementById('main-app-content');
             const photosContainer = document.getElementById('photo-grid');
@@ -136,12 +135,11 @@
             let db;
             let auth;
             let userId;
-            let appInitialized = false; // Флаг для предотвращения повторной инициализации
+            let appInitialized = false;
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-            // Используем предоставленную средой конфигурацию Firebase, если она доступна
+            // Конфигурация Firebase
             const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-              // ВАШИ КЛЮЧИ FIREBASE (если не предоставляются средой)
               apiKey: "YOUR_API_KEY",
               authDomain: "YOUR_AUTH_DOMAIN",
               projectId: "YOUR_PROJECT_ID",
@@ -150,21 +148,34 @@
               appId: "YOUR_APP_ID"
             };
 
-            // Инициализируем сервисы Firebase
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
+            // Проверка конфигурации
+            if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+                showMessage("Конфигурация Firebase не настроена. Пожалуйста, укажите правильные ключи.", false);
+                hideSplashScreen();
+                return;
+            }
 
-            // Функция для скрытия заставки и отображения основного содержимого
+            // Инициализация Firebase
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+            } catch (e) {
+                console.error("Ошибка инициализации Firebase:", e);
+                showMessage("Критическая ошибка при инициализации Firebase.", false);
+                hideSplashScreen();
+                return;
+            }
+
+            // --- Функции UI ---
             function hideSplashScreen() {
                 splashScreen.style.opacity = '0';
                 setTimeout(() => {
                     splashScreen.classList.add('hidden');
                     mainAppContent.classList.remove('hidden');
-                }, 1000); // Ожидание анимации затухания
+                }, 1000);
             }
 
-            // Показать и скрыть сообщения
             function showMessage(text, isTemporary = true) {
                 messageBoxText.textContent = text;
                 messageBox.classList.remove('hidden');
@@ -175,10 +186,11 @@
                 }
             }
 
-            // Инициализация всего приложения
+            // --- Логика приложения ---
             async function initApp() {
-                if (appInitialized) return; // Если уже инициализировано, выходим
+                if (appInitialized) return;
                 appInitialized = true;
+                console.log("Инициализация приложения...");
 
                 try {
                     await initCamera();
@@ -187,85 +199,60 @@
                 } catch (e) {
                     console.error("Ошибка инициализации приложения:", e);
                     let errorMsg = "Ошибка инициализации.";
-                    if (e.name === 'NotAllowedError') {
-                        errorMsg = "Доступ к камере отклонен. Пожалуйста, разрешите доступ в настройках браузера.";
-                    } else if (e.name === 'NotFoundError') {
-                        errorMsg = "Камера не найдена на этом устройстве.";
-                    } else if (e.name === 'NotReadableError') {
-                        errorMsg = "Камера используется другим приложением.";
-                    }
+                    if (e.name === 'NotAllowedError') errorMsg = "Доступ к камере отклонен. Разрешите доступ в настройках браузера.";
+                    else if (e.name === 'NotFoundError') errorMsg = "Камера не найдена на этом устройстве.";
+                    else if (e.name === 'NotReadableError') errorMsg = "Камера используется другим приложением.";
                     showMessage(errorMsg, false);
-                    hideSplashScreen(); // Показываем интерфейс, чтобы пользователь увидел ошибку
+                    hideSplashScreen();
                 }
             }
-
-            // Слушатель состояния аутентификации
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    // Пользователь вошел в систему.
-                    userId = user.uid;
-                    console.log("Пользователь аутентифицирован:", userId);
-                    initApp(); // Запускаем приложение
-                } else {
-                    // Пользователь не вошел в систему.
-                    console.log("Пользователь не аутентифицирован, попытка анонимного входа.");
-                }
-            });
-
-            // Функция для попытки входа
-            async function attemptSignIn() {
+            
+            // --- Логика аутентификации ---
+            async function signInUser() {
                 try {
-                    // Сначала проверяем, есть ли уже пользователь
-                    if (auth.currentUser) {
-                         console.log("Найден существующий пользователь.");
-                         initApp(); // Если да, сразу инициализируем
-                         return;
-                    }
-                    // Если пользователя нет, пытаемся войти
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                         await signInWithCustomToken(auth, __initial_auth_token);
                     } else {
                         await signInAnonymously(auth);
                     }
-                    // onAuthStateChanged обработает успешный вход и вызовет initApp
                 } catch (error) {
-                    console.error("Ошибка аутентификации Firebase:", error);
-                    showMessage("Ошибка аутентификации. Пожалуйста, перезагрузите страницу.", false);
+                    console.error("Ошибка аутентификации Firebase:", error.code, error.message);
+                    let userMessage = "Ошибка аутентификации. Пожалуйста, перезагрузите страницу.";
+                    if (error.code === 'auth/operation-not-allowed') {
+                        userMessage = "Анонимный вход не разрешен. Проверьте настройки Firebase.";
+                    }
+                    showMessage(userMessage, false);
                     captureBtn.disabled = true;
-                    hideSplashScreen(); // Показываем интерфейс для отображения ошибки
+                    hideSplashScreen();
                 }
             }
-            
-            // Запускаем процесс входа
-            attemptSignIn();
 
+            // Главный контроллер: onAuthStateChanged
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    // Пользователь вошел в систему
+                    userId = user.uid;
+                    console.log("Пользователь аутентифицирован:", userId);
+                    initApp(); // Единственная точка входа в основную логику
+                } else {
+                    // Пользователь не вошел в систему, пытаемся войти
+                    console.log("Пользователь не аутентифицирован. Попытка входа...");
+                    signInUser();
+                }
+            });
 
-            // Инициализация камеры
+            // --- Функции камеры и фото ---
             async function initCamera() {
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                     throw new Error("Ваш браузер не поддерживает доступ к камере.");
                 }
-                
                 let stream;
-                // Сначала пытаемся получить доступ к передней камере (для селфи)
                 try {
-                    stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { 
-                            facingMode: 'user',
-                            width: { ideal: 1920 },
-                            height: { ideal: 1080 }
-                        } 
-                    });
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 } } });
                 } catch (err) {
                     console.warn("Ошибка доступа к передней камере, попытка использовать заднюю:", err);
-                    // Если не получилось, пробуем заднюю
-                    try {
-                        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                    } catch (e) {
-                        throw e; // Если обе попытки провалились
-                    }
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                 }
-                
                 if (stream) {
                     cameraView.srcObject = stream;
                     await cameraView.play();
@@ -274,20 +261,18 @@
                 }
             }
             
-            // Таймер обратного отсчета
             function startCountdown() {
                 captureBtn.disabled = true;
                 let count = 3;
                 countdown.textContent = count;
                 countdown.classList.remove('opacity-0');
-
                 const timer = setInterval(() => {
                     count--;
                     if (count > 0) {
                         countdown.textContent = count;
                     } else {
                         clearInterval(timer);
-                        countdown.textContent = '📸'; // Смайлик в момент съемки
+                        countdown.textContent = '📸';
                         takePhoto();
                         setTimeout(() => {
                            countdown.classList.add('opacity-0');
@@ -297,25 +282,17 @@
                 }, 1000);
             }
 
-            // Сделать фото и сохранить в Firestore
             async function takePhoto() {
                 const canvas = document.createElement('canvas');
-                const videoWidth = cameraView.videoWidth;
-                const videoHeight = cameraView.videoHeight;
-
-                canvas.width = videoWidth;
-                canvas.height = videoHeight;
+                canvas.width = cameraView.videoWidth;
+                canvas.height = cameraView.videoHeight;
                 const context = canvas.getContext('2d');
-
-                // Учитываем зеркальное отображение
-                context.translate(videoWidth, 0);
+                context.translate(canvas.width, 0);
                 context.scale(-1, 1);
-                context.drawImage(cameraView, 0, 0, videoWidth, videoHeight);
-
-                const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9); // Сжатие JPEG
+                context.drawImage(cameraView, 0, 0, canvas.width, canvas.height);
+                const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
                 
                 showMessage("Загрузка фото...", false);
-
                 try {
                     const photosRef = collection(db, `artifacts/${appId}/public/data/wedding-photos`);
                     await addDoc(photosRef, {
@@ -329,46 +306,36 @@
                 }
             }
             
-            // Настроить слушатель для отображения фотографий в реальном времени
             function setupPhotoListener() {
                 const photosRef = collection(db, `artifacts/${appId}/public/data/wedding-photos`);
-                const q = query(photosRef, limit(50)); 
-            
+                const q = query(photosRef, limit(50));
                 onSnapshot(q, (querySnapshot) => {
                     const photos = [];
                     querySnapshot.forEach((doc) => {
                         photos.push({ id: doc.id, ...doc.data() });
                     });
-
-                    // Сортируем фотографии по дате (от новых к старым)
                     photos.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                    
-                    photosContainer.innerHTML = ''; // Очищаем контейнер
+                    photosContainer.innerHTML = '';
                     if (photos.length > 0) {
-                        photos.forEach((photo) => {
-                            displayPhoto(photo.photoData);
-                        });
+                        photos.forEach(photo => displayPhoto(photo.photoData));
                     } else {
                         photosContainer.innerHTML = '<p class="text-center text-gray-500 col-span-full">Фотографий пока нет. Будьте первыми!</p>';
                     }
                 });
             }
 
-            // Отобразить фотографию
             function displayPhoto(dataUrl) {
                 const photoWrapper = document.createElement('div');
                 photoWrapper.className = 'relative group rounded-xl overflow-hidden shadow-lg transition-transform transform hover:scale-105';
-                
                 const img = document.createElement('img');
                 img.src = dataUrl;
                 img.className = 'w-full h-auto object-cover rounded-xl';
-                img.loading = 'lazy'; // Ленивая загрузка для производительности
-                
+                img.loading = 'lazy';
                 photoWrapper.appendChild(img);
-                photosContainer.appendChild(photoWrapper); // Используем append, так как сортируем массив заранее
+                photosContainer.appendChild(photoWrapper);
             }
 
-            // Обработчики событий
+            // Обработчик клика
             captureBtn.addEventListener('click', () => {
                 if (!auth.currentUser) {
                     showMessage("Пожалуйста, подождите, идет аутентификация...", true);
