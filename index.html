@@ -115,9 +115,9 @@
 
     <!-- Firebase SDKs -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // Основной скрипт
         document.addEventListener('DOMContentLoaded', async () => {
@@ -137,8 +137,8 @@
             let userId;
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-            // Конфигурация Firebase
-            const firebaseConfig = {
+            // Используем предоставленную средой конфигурацию Firebase, если она доступна
+            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
               apiKey: "AIzaSyBojX_FBhea41ITHrheVaQFucPyn2r6gS4",
               authDomain: "svadba-31c48.firebaseapp.com",
               projectId: "svadba-31c48",
