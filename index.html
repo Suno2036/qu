@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        /* Base styles for a modern, luxurious feel */
+        /* Базовые стили для современного, роскошного вида */
         body {
             font-family: 'Poppins', sans-serif;
             touch-action: manipulation;
@@ -57,15 +57,15 @@
 </head>
 <body class="bg-gray-900 flex flex-col min-h-screen text-gray-200">
 
-    <!-- Splash screen with logo -->
+    <!-- Заставка с логотипом -->
     <div id="splash-screen" class="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center z-50 transition-opacity duration-1000">
         <img src="https://placehold.co/200x200/B8860B/ffffff?text=LOGO" alt="Logo" class="animate-pulse mb-8 rounded-full">
         <p class="text-xl text-gray-400">Загрузка...</p>
     </div>
 
-    <!-- Main application content (initially hidden) -->
+    <!-- Основное содержимое приложения (изначально скрыто) -->
     <div id="main-app-content" class="hidden flex-grow flex flex-col">
-        <!-- Header and description -->
+        <!-- Заголовок и описание -->
         <header class="text-center p-6 bg-glass rounded-b-3xl shadow-lg sticky top-0 z-10">
             <h1 class="font-wedding-title text-5xl sm:text-6xl font-bold text-pink-400">
                 Илья & Алина
@@ -76,15 +76,15 @@
         </header>
 
         <main class="flex-grow p-4 sm:p-6 flex flex-col items-center">
-            <!-- Photo booth section (main camera) -->
+            <!-- Секция фотобудки (основная камера) -->
             <div id="camera-section" class="w-full max-w-2xl mt-8 mb-8 bg-glass rounded-3xl shadow-xl p-4 sm:p-6 fade-in">
                 <h2 class="text-3xl font-bold text-center mb-4 text-pink-400">Сделать фото</h2>
-                <!-- Camera view -->
+                <!-- Вид с камеры -->
                 <div class="w-full relative overflow-hidden rounded-xl mb-4" style="padding-top: 75%;">
                     <video id="camera-view" class="absolute inset-0" playsinline autoplay></video>
                     <div id="countdown" class="absolute inset-0 flex items-center justify-center text-white text-9xl font-bold opacity-0 transition-opacity duration-300"></div>
                 </div>
-                <!-- Control buttons -->
+                <!-- Кнопки управления -->
                 <div class="flex justify-center items-center space-x-4">
                     <button id="capture-btn" class="flex-grow py-3 px-6 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-full shadow-lg transition-transform transform hover:scale-105 active:scale-95 text-lg font-semibold">
                         Сделать фото
@@ -92,22 +92,22 @@
                 </div>
             </div>
 
-            <!-- Photo gallery section -->
+            <!-- Секция фотогалереи -->
             <div id="photos-container" class="w-full max-w-4xl mt-6">
                 <h2 class="text-3xl font-bold text-center mb-6 text-pink-400">Галерея</h2>
                 <div id="photo-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 fade-in">
-                    <!-- Photos will be added here -->
+                    <!-- Фотографии будут добавлены сюда -->
                     <p class="text-center text-gray-500 col-span-full">Загрузка фотографий...</p>
                 </div>
             </div>
         </main>
 
-        <!-- Notification message -->
+        <!-- Уведомление -->
         <div id="message-box" class="message-box text-center p-6 bg-white rounded-xl shadow-lg border-2 border-gray-200 hidden">
             <p id="message-box-text" class="text-gray-700 font-medium"></p>
         </div>
 
-        <!-- Footer -->
+        <!-- Футер -->
         <footer class="text-center p-4 text-gray-500 text-sm">
             &copy; 2024 Свадебная фотобудка. Все права защищены.
         </footer>
@@ -116,12 +116,12 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Main script
+        // Основной скрипт
         document.addEventListener('DOMContentLoaded', async () => {
-            // UI elements
+            // Элементы пользовательского интерфейса
             const splashScreen = document.getElementById('splash-screen');
             const mainAppContent = document.getElementById('main-app-content');
             const photosContainer = document.getElementById('photo-grid');
@@ -131,13 +131,13 @@
             const messageBox = document.getElementById('message-box');
             const messageBoxText = document.getElementById('message-box-text');
 
-            // App state
+            // Состояние приложения
             let db;
             let auth;
             let userId;
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-            // Use the environment-provided Firebase config if available, otherwise use the hardcoded one
+            // Используем предоставленную средой конфигурацию Firebase, если она доступна
             const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
               apiKey: "AIzaSyBojX_FBhea41ITHrheVaQFucPyn2r6gS4",
               authDomain: "svadba-31c48.firebaseapp.com",
@@ -148,79 +148,104 @@
               measurementId: "G-JC9ENZPZ96"
             };
 
+            // Инициализируем сервисы Firebase
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
 
-            try {
-                // Use the custom token if available, otherwise sign in anonymously
-                if (typeof __initial_auth_token !== 'undefined') {
-                    await signInWithCustomToken(auth, __initial_auth_token);
+            // Используем onAuthStateChanged, чтобы убедиться, что приложение загружается только после того, как Firebase будет готов
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    // Пользователь вошел в систему. Продолжаем логику приложения.
+                    userId = user.uid;
+                    console.log("Firebase signed in. User ID:", userId);
+                    initApp();
                 } else {
-                    await signInAnonymously(auth);
+                    // Пользователь не вошел в систему, пытаемся войти анонимно.
+                    try {
+                        // Используем специальный токен, если он доступен, иначе анонимный вход
+                        if (typeof __initial_auth_token !== 'undefined') {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (e) {
+                        console.error("Firebase auth error:", e);
+                        showMessage("Ошибка аутентификации. Пожалуйста, перезагрузите страницу.", false);
+                        captureBtn.disabled = true;
+                        hideSplashScreen(); // Скрыть заставку при ошибке аутентификации
+                    }
                 }
-                userId = auth.currentUser.uid;
-                console.log("Firebase signed in. User ID:", userId);
-                setupPhotoListener();
-            } catch (e) {
-                console.error("Firebase auth error:", e);
-                showMessage("Ошибка аутентификации. Пожалуйста, перезагрузите страницу.", false);
-                captureBtn.disabled = true;
-                // Still try to init camera even if Firebase auth fails
-                init();
+            });
+
+            // Инициализация всего приложения
+            async function initApp() {
+                try {
+                    await initCamera();
+                    setupPhotoListener();
+                    hideSplashScreen();
+                } catch (e) {
+                    console.error("Initialization error:", e);
+                    // Предоставляем более конкретное сообщение об ошибке
+                    let errorMsg = "Ошибка инициализации.";
+                    if (e.name === 'NotAllowedError') {
+                        errorMsg = "Доступ к камере отклонен. Пожалуйста, разрешите доступ в настройках браузера.";
+                    } else if (e.name === 'NotFoundError') {
+                        errorMsg = "Камера не найдена на этом устройстве.";
+                    } else if (e.name === 'NotReadableError') {
+                        errorMsg = "Камера используется другим приложением.";
+                    }
+                    showMessage(errorMsg, false);
+                    hideSplashScreen();
+                }
             }
 
-            // Initialize the camera with high-quality settings
-            async function init() {
+            // Инициализация камеры с высококачественными настройками
+            async function initCamera() {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error("Ваш браузер не поддерживает доступ к камере.");
+                }
+                
                 let stream;
                 try {
-                    // Request high resolution, good frame rate, and continuous focus
+                    // Пытаемся получить доступ к задней камере
                     stream = await navigator.mediaDevices.getUserMedia({ 
                         video: {
                             facingMode: 'environment',
                             width: { ideal: 1920 },
                             height: { ideal: 1080 },
-                            frameRate: { ideal: 30 },
-                            advanced: [{ focusMode: 'continuous' }]
+                            frameRate: { ideal: 30 }
                         }
                     });
                 } catch (err) {
-                    console.error("Error accessing rear camera, attempting to use front: ", err);
+                    console.warn("Ошибка доступа к задней камере, попытка использовать переднюю: ", err);
                     try {
+                        // Попытка использовать переднюю камеру как запасной вариант
                         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
                     } catch (e) {
-                        showMessage("Ошибка: Не удалось получить доступ к камере. Пожалуйста, разрешите доступ.", false);
-                        console.error("Camera access error: ", e);
-                        captureBtn.disabled = true;
-                        // Hide splash screen and show main content even on error
-                        hideSplashScreen();
-                        return;
+                        // Обе попытки провалились, выбрасываем ошибку
+                        throw e;
                     }
                 }
                 
                 if (stream) {
                     cameraView.srcObject = stream;
                     cameraView.play();
-                    // Hide splash screen after successful camera initialization
-                    hideSplashScreen();
                 } else {
-                    showMessage("Ошибка: Не удалось получить доступ к камере.", false);
-                    captureBtn.disabled = true;
-                    // Hide splash screen and show main content even on error
-                    hideSplashScreen();
+                    throw new Error("Не удалось получить поток с камеры.");
                 }
             }
             
-            // Function to hide the splash screen and show the main content
+            // Функция для скрытия заставки и отображения основного содержимого
             function hideSplashScreen() {
                 splashScreen.style.opacity = '0';
                 setTimeout(() => {
                     splashScreen.classList.add('hidden');
                     mainAppContent.classList.remove('hidden');
-                }, 1000); // Wait for the fade-out animation
+                }, 1000); // Ожидание анимации затухания
             }
 
-            // Show and hide messages
+            // Показать и скрыть сообщения
             function showMessage(text, isTemporary = true) {
                 messageBoxText.textContent = text;
                 messageBox.classList.remove('hidden');
@@ -231,7 +256,7 @@
                 }
             }
 
-            // Countdown timer
+            // Таймер обратного отсчета
             function startCountdown() {
                 let count = 3;
                 countdown.textContent = count;
@@ -250,7 +275,7 @@
                 }, 1000);
             }
 
-            // Take a photo and save to Firestore
+            // Сделать фото и сохранить в Firestore
             async function takePhoto() {
                 const canvas = document.createElement('canvas');
                 const videoWidth = cameraView.videoWidth;
@@ -267,7 +292,7 @@
                 captureBtn.disabled = true;
 
                 try {
-                    // Save photo to Firestore database
+                    // Сохранить фото в базу данных Firestore
                     const photosRef = collection(db, `artifacts/${appId}/public/data/wedding-photos`);
                     await addDoc(photosRef, {
                         photoData: imageDataUrl,
@@ -282,22 +307,22 @@
                 }
             }
             
-            // Set up listener to display photos in real-time
+            // Настроить слушатель для отображения фотографий в реальном времени
             function setupPhotoListener() {
                 const photosRef = collection(db, `artifacts/${appId}/public/data/wedding-photos`);
-                const q = query(photosRef, limit(10)); // Display the 10 most recent photos
+                const q = query(photosRef, limit(10)); // Отображаем 10 последних фотографий
             
-                // We sort the data on the client side since orderBy may require an index
+                // Сортируем данные на стороне клиента, так как orderBy может потребовать индекс
                 onSnapshot(q, (querySnapshot) => {
                     const photos = [];
                     querySnapshot.forEach((doc) => {
                         photos.push({ id: doc.id, ...doc.data() });
                     });
 
-                    // Sort photos by timestamp in descending order
+                    // Сортируем фотографии по временной метке в порядке убывания
                     photos.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                     
-                    photosContainer.innerHTML = ''; // Clear container before updating
+                    photosContainer.innerHTML = ''; // Очищаем контейнер перед обновлением
                     if (photos.length > 0) {
                         photos.forEach((photo) => {
                             displayPhoto(photo.photoData);
@@ -308,7 +333,7 @@
                 });
             }
 
-            // Display a photo
+            // Отобразить фотографию
             function displayPhoto(dataUrl) {
                 const photoWrapper = document.createElement('div');
                 photoWrapper.className = 'relative group rounded-xl overflow-hidden shadow-lg transition-transform transform hover:scale-105';
@@ -317,12 +342,12 @@
                 img.src = dataUrl;
                 img.className = 'w-full h-auto object-cover rounded-xl';
                 
-                // Add photo to the container
+                // Добавить фото в контейнер
                 photoWrapper.appendChild(img);
                 photosContainer.prepend(photoWrapper);
             }
 
-            // Event handlers
+            // Обработчики событий
             captureBtn.addEventListener('click', () => {
                 startCountdown();
             });
