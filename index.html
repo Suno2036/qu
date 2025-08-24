@@ -7,13 +7,25 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Firebase SDK - необходимые модули -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Глобальные переменные для доступа в JavaScript
+        window.initializeApp = initializeApp;
+        window.getAuth = getAuth;
+        window.signInAnonymously = signInAnonymously;
+        window.signInWithCustomToken = signInWithCustomToken;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.firestore = { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, serverTimestamp };
+    </script>
     <style>
-        /* Базовые стили для современного, роскошного вида */
         body {
-            font-family: 'Poppins', sans-serif;
+            font-family: 'Inter', sans-serif;
             touch-action: manipulation;
-            background: linear-gradient(to bottom right, #0a0a0a, #1a1a1a);
         }
         .font-wedding-title {
             font-family: 'Dancing Script', cursive;
@@ -29,323 +41,693 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            border-radius: 1rem;
         }
-        .message-box {
+        .camera-container {
             position: fixed;
-            top: 50%;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+        }
+        .camera-controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        /* Анимация для всплывающего окна */
+        @keyframes modal-scale-in {
+            from { transform: scale(0.7); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .modal-content {
+            animation: modal-scale-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        /* Стиль для всплывающего уведомления */
+        #notification-popup {
+            position: fixed;
+            top: -100px;
             left: 50%;
-            transform: translate(-50%, -50%);
-            padding: 1.5rem;
-            background-color: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 1rem;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
-            z-index: 50;
+            transform: translateX(-50%);
+            z-index: 60;
+            transition: top 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+        #notification-popup.show {
+            top: 20px;
+        }
+        /* Стиль для модального окна просмотра фото */
+        #photo-viewer-modal {
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 70;
+        }
+        /* Кастомный стиль для ползунка зума */
+        #zoom-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+        #zoom-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+        #zoom-slider:hover::-webkit-slider-thumb {
+            background: #f1f1f1;
+        }
+        #zoom-slider:hover::-moz-range-thumb {
+            background: #f1f1f1;
+        }
+        .gallery-photo-item {
+            position: relative;
+            width: 100%;
+            padding-bottom: 100%; /* Сохраняем соотношение сторон 1:1 */
+            background-size: cover;
+            background-position: center;
+            border-radius: 0.5rem;
+            border: 2px solid white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+        }
+        .gallery-photo-item .watermark-text {
+            position: absolute;
+            bottom: 0.5rem;
+            right: 0.5rem;
+            background-color: rgba(0, 0, 0, 0.5);
             color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            pointer-events: none;
         }
-        .hidden {
-            display: none;
-        }
-        .bg-glass {
-            background-color: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+        .gallery-photo-item:hover .watermark-text {
+            opacity: 1;
         }
     </style>
 </head>
-<body class="bg-gray-900 flex flex-col min-h-screen text-gray-200">
+<body class="bg-rose-50 text-gray-800">
 
-    <!-- Заставка с логотипом -->
-    <div id="splash-screen" class="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center z-50 transition-opacity duration-1000">
-        <img src="https://placehold.co/200x200/B8860B/ffffff?text=LOGO" alt="Logo" class="animate-pulse mb-8 rounded-full">
-        <p class="text-xl text-gray-400">Загрузка...</p>
+    <!-- Модальное окно для ввода имени -->
+    <div id="name-input-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div class="modal-content bg-white p-8 rounded-xl shadow-2xl text-center max-w-sm w-full">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Как к вам обращаться?</h2>
+            <p class="text-sm text-gray-600 mb-6">Ваше имя будет добавлено на каждую фотографию.</p>
+            <input type="text" id="user-name-input" placeholder="Введите ваше имя" class="w-full p-3 rounded-lg border-2 border-gray-300 focus:outline-none focus:border-rose-500 transition mb-4">
+            <button id="submit-name-btn" class="w-full bg-rose-500 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-rose-600 transition-all transform hover:scale-105 active:scale-95">
+                Продолжить
+            </button>
+            <p id="name-error-message" class="mt-4 text-red-500 font-medium hidden"></p>
+        </div>
     </div>
 
-    <!-- Основное содержимое приложения (изначально скрыто) -->
-    <div id="main-app-content" class="hidden flex-grow flex flex-col">
-        <!-- Заголовок и описание -->
-        <header class="text-center p-6 bg-glass rounded-b-3xl shadow-lg sticky top-0 z-10">
-            <h1 class="font-wedding-title text-5xl sm:text-6xl font-bold text-pink-400">
+    <!-- Начальный экран -->
+    <div id="welcome-screen" class="min-h-screen flex flex-col items-center justify-center text-center p-6 fade-in bg-rose-50 hidden">
+        <div class="p-8 md:p-12 rounded-3xl bg-white shadow-xl max-w-lg w-full transform transition-transform hover:scale-105">
+            <h1 class="font-wedding-title text-5xl md:text-6xl text-rose-500">
                 Илья & Алина
             </h1>
-            <p class="mt-2 text-gray-400 text-sm sm:text-base">
-                Оставьте нам свое фото на память!
+            <p class="mt-4 text-xl md:text-2xl font-medium text-gray-700">
+                28.08.2025
             </p>
-        </header>
-
-        <main class="flex-grow p-4 sm:p-6 flex flex-col items-center">
-            <!-- Секция фотобудки (основная камера) -->
-            <div id="camera-section" class="w-full max-w-2xl mt-8 mb-8 bg-glass rounded-3xl shadow-xl p-4 sm:p-6 fade-in">
-                <h2 class="text-3xl font-bold text-center mb-4 text-pink-400">Сделать фото</h2>
-                <!-- Вид с камеры -->
-                <div class="w-full relative overflow-hidden rounded-xl mb-4" style="padding-top: 75%;">
-                    <video id="camera-view" class="absolute inset-0" playsinline autoplay></video>
-                    <div id="countdown" class="absolute inset-0 flex items-center justify-center text-white text-9xl font-bold opacity-0 transition-opacity duration-300"></div>
-                </div>
-                <!-- Кнопки управления -->
-                <div class="flex justify-center items-center space-x-4">
-                    <button id="capture-btn" class="flex-grow py-3 px-6 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-full shadow-lg transition-transform transform hover:scale-105 active:scale-95 text-lg font-semibold">
-                        Сделать фото
-                    </button>
-                </div>
-            </div>
-
-            <!-- Секция фотогалереи -->
-            <div id="photos-container" class="w-full max-w-4xl mt-6">
-                <h2 class="text-3xl font-bold text-center mb-6 text-pink-400">Галерея</h2>
-                <div id="photo-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 fade-in">
-                    <!-- Фотографии будут добавлены сюда -->
-                    <p class="text-center text-gray-500 col-span-full">Загрузка фотографий...</p>
-                </div>
-            </div>
-        </main>
-
-        <!-- Уведомление -->
-        <div id="message-box" class="message-box text-center p-6 bg-white rounded-xl shadow-lg border-2 border-gray-200 hidden">
-            <p id="message-box-text" class="text-gray-700 font-medium"></p>
+            <p class="mt-2 text-lg text-gray-600">
+                Поделитесь лучшими моментами этого дня!
+            </p>
+            <p class="mt-4 text-sm text-gray-500">Вы можете сделать до 25 фотографий.</p>
+            <button id="start-camera-btn" class="mt-8 bg-rose-500 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-rose-600 transition-all transform hover:scale-105 active:scale-95">
+                Открыть камеру
+            </button>
+            <p id="error-message" class="mt-4 text-red-500 font-medium hidden max-w-md"></p>
         </div>
-
-        <!-- Футер -->
-        <footer class="text-center p-4 text-gray-500 text-sm">
-            &copy; 2024 Свадебная фотобудка. Все права защищены.
-        </footer>
     </div>
 
-    <!-- Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    <!-- Экран с камерой -->
+    <div id="camera-screen" class="hidden">
+        <div class="camera-container">
+            <video id="camera-view" playsinline autoplay muted></video>
+        </div>
+        
+        <!-- Элементы управления камерой -->
+        <div class="camera-controls">
+            <!-- Кнопка переключения камеры -->
+            <button id="switch-camera-btn" class="absolute left-4 bottom-8 text-white bg-white/30 backdrop-blur-sm p-3 rounded-full hover:bg-white/50 transition hidden">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/><path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5"/><path d="m20 12-3-3-3 3"/><path d="m4 12 3 3 3-3"/></svg>
+            </button>
 
-        // Основной скрипт
+            <!-- Кнопка "Сделать фото" с изображением -->
+            <button id="take-photo-btn" class="w-20 h-20 rounded-full transition-transform transform active:scale-90 flex items-center justify-center p-2 bg-transparent">
+                <img src="https://raw.githubusercontent.com/Suno2036/qr/main/White%20and%20Black%20Simple%20Initial%20Wedding%20Logo.png" 
+                     alt="Сделать фото" 
+                     class="w-full h-full object-contain"
+                     onerror="this.onerror=null;this.src='https://placehold.co/100x100/ffffff/000000?text=Logo'">
+            </button>
+            
+            <!-- Счетчик оставшихся фото -->
+            <div class="absolute right-4 bottom-9 text-white bg-white/30 backdrop-blur-sm px-3 py-1 rounded-full text-center">
+                <span id="photo-counter" class="font-bold text-lg">25</span>
+                <span class="text-xs block">фото</span>
+            </div>
+        </div>
+        
+        <!-- Ползунок зума -->
+        <div id="zoom-controls" class="absolute left-1/2 bottom-20 transform -translate-x-1/2 w-3/4 max-w-sm hidden">
+            <input type="range" id="zoom-slider" min="1" max="1" value="1" step="0.1" class="w-full h-2 bg-white/30 rounded-lg appearance-none cursor-pointer backdrop-blur-sm">
+        </div>
+
+        <!-- Скрытый canvas для захвата изображения -->
+        <canvas id="photo-canvas" class="hidden"></canvas>
+    </div>
+
+    <!-- Общая галерея -->
+    <div id="gallery-screen" class="min-h-screen bg-rose-50 p-6 pt-12 hidden">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-3xl font-bold font-wedding-title text-rose-500">Общая галерея</h2>
+            <button id="back-to-camera-btn" class="text-rose-500 font-bold px-4 py-2 rounded-full border-2 border-rose-500 hover:bg-rose-500 hover:text-white transition-colors">
+                Назад к камере
+            </button>
+        </div>
+        <div id="common-gallery-container" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <!-- Фотографии из Firestore будут здесь -->
+        </div>
+    </div>
+
+    <!-- Кастомное всплывающее окно для сообщений -->
+    <div id="message-box" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 hidden">
+        <div class="modal-content bg-white p-6 rounded-xl shadow-2xl text-center max-w-sm w-full">
+            <p id="message-box-text" class="text-lg font-semibold text-gray-800"></p>
+            <button id="message-box-close" class="mt-4 px-6 py-2 bg-rose-500 text-white rounded-full hover:bg-rose-600 transition-colors">OK</button>
+        </div>
+    </div>
+
+    <!-- Всплывающее уведомление от молодоженов -->
+    <div id="notification-popup" class="w-full max-w-sm bg-white rounded-xl shadow-lg p-3 flex items-center gap-3">
+        <img id="notification-image" src="https://raw.githubusercontent.com/Suno2036/qr/main/a19abaa4-3c2f-46c8-9263-af6d4d80be2e.jpeg" 
+             class="w-12 h-12 object-cover rounded-full border-2 border-white shadow-sm"
+             alt="Илья и Алина">
+        <div class="flex-1">
+            <p class="font-bold text-sm text-gray-900">Илья и Алина</p>
+            <p id="notification-message" class="text-sm text-gray-600 mt-1"></p>
+        </div>
+    </div>
+
+    <!-- Аудио элемент для звука уведомления -->
+    <audio id="notification-sound" src="https://raw.githubusercontent.com/Suno2036/qr/main/notification-sound-for-messenger-messages.mp3" preload="auto"></audio>
+
+    <!-- Модальное окно для просмотра фотографий -->
+    <div id="photo-viewer-modal" class="fixed inset-0 flex items-center justify-center p-4 hidden">
+        <button id="close-photo-viewer" class="absolute top-4 right-4 text-white text-4xl">&times;</button>
+        <img id="full-size-photo" src="" alt="Full size photo" class="max-w-full max-h-full object-contain">
+    </div>
+
+    <script>
         document.addEventListener('DOMContentLoaded', async () => {
-            // Элементы пользовательского интерфейса
-            const splashScreen = document.getElementById('splash-screen');
-            const mainAppContent = document.getElementById('main-app-content');
-            const photosContainer = document.getElementById('photo-grid');
-            const captureBtn = document.getElementById('capture-btn');
-            const cameraView = document.getElementById('camera-view');
-            const countdown = document.getElementById('countdown');
+            // --- Элементы интерфейса ---
+            const nameInputModal = document.getElementById('name-input-modal');
+            const userNameInput = document.getElementById('user-name-input');
+            const submitNameBtn = document.getElementById('submit-name-btn');
+            const nameErrorMessage = document.getElementById('name-error-message');
+
+            const welcomeScreen = document.getElementById('welcome-screen');
+            const cameraScreen = document.getElementById('camera-screen');
+            const startCameraBtn = document.getElementById('start-camera-btn');
+            
+            const videoElement = document.getElementById('camera-view');
+            const takePhotoBtn = document.getElementById('take-photo-btn');
+            const switchCameraBtn = document.getElementById('switch-camera-btn');
+            const photoCounterEl = document.getElementById('photo-counter');
+            const canvas = document.getElementById('photo-canvas');
+            const context = canvas.getContext('2d');
+
             const messageBox = document.getElementById('message-box');
             const messageBoxText = document.getElementById('message-box-text');
+            const messageBoxCloseBtn = document.getElementById('message-box-close');
+            
+            const notificationPopup = document.getElementById('notification-popup');
+            const notificationMessageEl = document.getElementById('notification-message');
+            const notificationSound = document.getElementById('notification-sound');
 
-            // Состояние приложения
-            let db;
-            let auth;
-            let userId;
+            const photoViewerModal = document.getElementById('photo-viewer-modal');
+            const fullSizePhoto = document.getElementById('full-size-photo');
+            const closePhotoViewerBtn = document.getElementById('close-photo-viewer');
+            
+            const zoomControls = document.getElementById('zoom-controls');
+            const zoomSlider = document.getElementById('zoom-slider');
+
+            const galleryScreen = document.getElementById('gallery-screen');
+            const commonGalleryContainer = document.getElementById('common-gallery-container');
+            const backToCameraBtn = document.getElementById('back-to-camera-btn');
+            const downloadAllBtn = document.createElement('button'); // Создаем кнопку "Скачать все" динамически
+
+            // --- Настройки ---
+            const PHOTO_LIMIT = 25;
+            let currentStream;
+            let currentFacingMode = 'environment';
+            let userName = '';
+            
+            let supportsZoom = false;
+            let currentZoom = 1.0;
+            let minZoom = 1.0;
+            let maxZoom = 1.0;
+            let initialPinchDistance = null;
+
+            // Сообщения для всплывающего уведомления
+            const messages = [
+                'Спасибо, что разделили с нами этот счастливый день!',
+                'Вы самый желанный гость! Рады видеть вас!',
+                'Мы очень ценим ваше присутствие.',
+                'Ваша улыбка делает наш день ярче!',
+                'Спасибо за все, что вы для нас значите.',
+                'Каждый момент сегодня бесценен, спасибо вам!',
+                'Мы очень рады, что вы здесь.',
+                'Это лучший день в нашей жизни, благодаря вам!',
+                'Спасибо за тепло и радость, которую вы принесли.',
+                'Ваш приход - это самый лучший подарок.',
+                'Мы так счастливы, что вы с нами.',
+                'Пусть этот день останется в памяти навсегда.',
+                'Ваше присутствие - это счастье!',
+                'Спасибо за вашу дружбу и любовь.',
+                'Этот день был бы неполным без вас.',
+                'Вы делаете наш праздник особенным!',
+                'Мы любим вас, спасибо что вы есть.',
+                'Надеемся, вам весело!',
+                'Этот день создан для веселья, и вы - его часть!',
+                'Спасибо, что помогаете нам праздновать.',
+                'Мы запомним этот день навсегда.',
+                'Спасибо за смех и добрые слова.',
+                'Мы так благодарны, что вы здесь!',
+                'Этот день - волшебство, и вы - его часть.',
+                'Спасибо, что вы с нами в начале нашего нового пути!'
+            ];
+
+
+            // --- Состояние приложения ---
+            let photosTaken = parseInt(localStorage.getItem('weddingPhotosTakenCount') || '0');
+            let db, auth, userId;
+            
+            // Получаем Firebase-конфигурацию и id приложения из переменных окружения
+            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-            // Используем предоставленную средой конфигурацию Firebase, если она доступна
-            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-              apiKey: "AIzaSyBojX_FBhea41ITHrheVaQFucPyn2r6gS4",
-              authDomain: "svadba-31c48.firebaseapp.com",
-              projectId: "svadba-31c48",
-              storageBucket: "svadba-31c48.firebasestorage.app",
-              messagingSenderId: "1052874829050",
-              appId: "1:1052874829050:web:fe27036bfce06d0d496d43",
-              measurementId: "G-JC9ENZPZ96"
-            };
+            // --- Функции ---
 
-            // Инициализируем сервисы Firebase
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-
-            // Используем onAuthStateChanged, чтобы убедиться, что приложение загружается только после того, как Firebase будет готов
-            onAuthStateChanged(auth, async (user) => {
-                if (user) {
-                    // Пользователь вошел в систему. Продолжаем логику приложения.
-                    userId = user.uid;
-                    console.log("Firebase signed in. User ID:", userId);
-                    initApp();
-                } else {
-                    // Пользователь не вошел в систему, пытаемся войти анонимно.
-                    try {
-                        await signInAnonymously(auth);
-                    } catch (e) {
-                        console.error("Firebase auth error:", e);
-                        showMessage("Ошибка аутентификации. Пожалуйста, перезагрузите страницу.", false);
-                        captureBtn.disabled = true;
-                        hideSplashScreen(); // Скрыть заставку при ошибке аутентификации
-                    }
+            // Инициализация приложения и Firebase
+            async function init() {
+                if (!firebaseConfig) {
+                    messageBoxText.textContent = "Ошибка: конфигурация Firebase не найдена. Пожалуйста, убедитесь, что приложение запущено в корректной среде.";
+                    messageBox.classList.remove('hidden');
+                    return;
                 }
-            });
+                
+                // Инициализируем Firebase
+                const app = window.initializeApp(firebaseConfig);
+                db = window.firestore.getFirestore(app);
+                auth = window.getAuth(app);
 
-            // Инициализация всего приложения
-            async function initApp() {
+                // Анонимная аутентификация
                 try {
-                    await initCamera();
-                    setupPhotoListener();
-                    hideSplashScreen();
-                } catch (e) {
-                    console.error("Initialization error:", e);
-                    // Предоставляем более конкретное сообщение об ошибке
-                    let errorMsg = "Ошибка инициализации.";
-                    if (e.name === 'NotAllowedError') {
-                        errorMsg = "Доступ к камере отклонен. Пожалуйста, разрешите доступ в настройках браузера.";
-                    } else if (e.name === 'NotFoundError') {
-                        errorMsg = "Камера не найдена на этом устройстве.";
-                    } else if (e.name === 'NotReadableError') {
-                        errorMsg = "Камера используется другим приложением.";
+                    if (typeof __initial_auth_token !== 'undefined') {
+                        await window.signInWithCustomToken(auth, __initial_auth_token);
+                        console.log("Успешный вход через custom token.");
+                    } else {
+                        await window.signInAnonymously(auth);
+                        console.log("Успешный вход анонимно.");
                     }
-                    showMessage(errorMsg, false);
-                    hideSplashScreen();
+                    userId = auth.currentUser?.uid || crypto.randomUUID();
+                    console.log("Firebase User ID:", userId);
+                } catch (e) {
+                    console.error("Ошибка аутентификации Firebase:", e);
+                    messageBoxText.textContent = "Произошла ошибка аутентификации. Пожалуйста, попробуйте позже.";
+                    messageBox.classList.remove('hidden');
+                    return;
                 }
-            }
-
-            // Инициализация камеры с высококачественными настройками
-            async function initCamera() {
+                
+                // Проверяем базовую поддержку API
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error("Ваш браузер не поддерживает доступ к камере.");
+                    messageBoxText.textContent = "К сожалению, ваш браузер не поддерживает функцию камеры.";
+                    messageBox.classList.remove('hidden');
+                    startCameraBtn.disabled = true;
+                    return;
                 }
                 
-                let stream;
-                try {
-                    // Пытаемся получить доступ к задней камере
-                    stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: {
-                            facingMode: 'environment',
-                            width: { ideal: 1920 },
-                            height: { ideal: 1080 },
-                            frameRate: { ideal: 30 }
-                        }
-                    });
-                } catch (err) {
-                    console.warn("Ошибка доступа к задней камере, попытка использовать переднюю: ", err);
-                    try {
-                        // Попытка использовать переднюю камеру как запасной вариант
-                        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-                    } catch (e) {
-                        // Обе попытки провалились, выбрасываем ошибку
-                        throw e;
-                    }
+                if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+                    messageBoxText.textContent = "Для доступа к камере сайт должен быть открыт по защищенному протоколу (https://). Пожалуйста, проверьте адрес сайта.";
+                    messageBox.classList.remove('hidden');
+                    startCameraBtn.disabled = true;
+                    startCameraBtn.style.backgroundColor = '#ccc';
+                    return;
                 }
-                
-                if (stream) {
-                    cameraView.srcObject = stream;
-                    cameraView.play();
-                } else {
-                    throw new Error("Не удалось получить поток с камеры.");
-                }
-            }
-            
-            // Функция для скрытия заставки и отображения основного содержимого
-            function hideSplashScreen() {
-                splashScreen.style.opacity = '0';
-                setTimeout(() => {
-                    splashScreen.classList.add('hidden');
-                    mainAppContent.classList.remove('hidden');
-                }, 1000); // Ожидание анимации затухания
-            }
 
-            // Показать и скрыть сообщения
-            function showMessage(text, isTemporary = true) {
-                messageBoxText.textContent = text;
-                messageBox.classList.remove('hidden');
-                if (isTemporary) {
-                    setTimeout(() => {
-                        messageBox.classList.add('hidden');
-                    }, 3000);
-                }
-            }
-
-            // Таймер обратного отсчета
-            function startCountdown() {
-                let count = 3;
-                countdown.textContent = count;
-                countdown.classList.remove('opacity-0');
-
-                const timer = setInterval(() => {
-                    count--;
-                    if (count > 0) {
-                        countdown.textContent = count;
+                // Обработчики для ввода имени
+                submitNameBtn.addEventListener('click', () => {
+                    const name = userNameInput.value.trim();
+                    if (name.length > 0) {
+                        userName = name;
+                        nameInputModal.classList.add('hidden');
+                        welcomeScreen.classList.remove('hidden');
+                        initAppFlow();
                     } else {
-                        clearInterval(timer);
-                        countdown.textContent = '';
-                        countdown.classList.add('opacity-0');
-                        takePhoto();
+                        nameErrorMessage.textContent = 'Пожалуйста, введите ваше имя.';
+                        nameErrorMessage.classList.remove('hidden');
                     }
-                }, 1000);
-            }
+                });
 
-            // Сделать фото и сохранить в Firestore
-            async function takePhoto() {
-                const canvas = document.createElement('canvas');
-                const videoWidth = cameraView.videoWidth;
-                const videoHeight = cameraView.videoHeight;
-
-                canvas.width = videoWidth;
-                canvas.height = videoHeight;
-                const context = canvas.getContext('2d');
-                context.drawImage(cameraView, 0, 0, videoWidth, videoHeight);
-
-                const imageDataUrl = canvas.toDataURL('image/jpeg');
+                // Обработчик для закрытия кастомного модального окна
+                messageBoxCloseBtn.addEventListener('click', () => {
+                    messageBox.classList.add('hidden');
+                });
                 
-                showMessage("Загрузка фото...", false);
-                captureBtn.disabled = true;
+                // Обработчик для закрытия просмотра фото
+                closePhotoViewerBtn.addEventListener('click', () => {
+                    photoViewerModal.classList.add('hidden');
+                });
 
-                try {
-                    // Сохранить фото в базу данных Firestore
-                    const photosRef = collection(db, `artifacts/${appId}/public/data/wedding-photos`);
-                    await addDoc(photosRef, {
-                        photoData: imageDataUrl,
-                        timestamp: new Date().toISOString(),
-                    });
-                    showMessage("Фото успешно загружено!", true);
-                } catch (e) {
-                    showMessage("Ошибка при загрузке фото. Попробуйте еще раз.", true);
-                    console.error("Error adding document: ", e);
-                } finally {
-                    captureBtn.disabled = false;
-                }
-            }
-            
-            // Настроить слушатель для отображения фотографий в реальном времени
-            function setupPhotoListener() {
-                const photosRef = collection(db, `artifacts/${appId}/public/data/wedding-photos`);
-                const q = query(photosRef, limit(10)); // Отображаем 10 последних фотографий
-            
-                // Сортируем данные на стороне клиента, так как orderBy может потребовать индекс
-                onSnapshot(q, (querySnapshot) => {
-                    const photos = [];
-                    querySnapshot.forEach((doc) => {
-                        photos.push({ id: doc.id, ...doc.data() });
-                    });
-
-                    // Сортируем фотографии по временной метке в порядке убывания
-                    photos.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                    
-                    photosContainer.innerHTML = ''; // Очищаем контейнер перед обновлением
-                    if (photos.length > 0) {
-                        photos.forEach((photo) => {
-                            displayPhoto(photo.photoData);
-                        });
-                    } else {
-                        photosContainer.innerHTML = '<p class="text-center text-gray-500 col-span-full">Фотографий пока нет.</p>';
-                    }
+                // Обработчик для кнопки "Назад к камере"
+                backToCameraBtn.addEventListener('click', () => {
+                    galleryScreen.classList.add('hidden');
+                    cameraScreen.classList.remove('hidden');
+                    cameraScreen.classList.add('fade-in');
                 });
             }
 
-            // Отобразить фотографию
-            function displayPhoto(dataUrl) {
-                const photoWrapper = document.createElement('div');
-                photoWrapper.className = 'relative group rounded-xl overflow-hidden shadow-lg transition-transform transform hover:scale-105';
+            // Основной поток приложения после ввода имени и аутентификации
+            function initAppFlow() {
+                updatePhotoCounter();
+                startCameraBtn.addEventListener('click', startCamera);
+                takePhotoBtn.addEventListener('click', takePhoto);
+                switchCameraBtn.addEventListener('click', switchCamera);
                 
-                const img = document.createElement('img');
-                img.src = dataUrl;
-                img.className = 'w-full h-auto object-cover rounded-xl';
-                
-                // Добавить фото в контейнер
-                photoWrapper.appendChild(img);
-                photosContainer.prepend(photoWrapper);
+                // Добавляем кнопку "Посмотреть галерею"
+                const galleryViewBtn = document.createElement('button');
+                galleryViewBtn.textContent = 'Посмотреть все фото';
+                galleryViewBtn.className = 'absolute left-4 top-4 text-white bg-white/30 backdrop-blur-sm px-4 py-2 rounded-full font-bold text-sm hover:bg-white/50 transition';
+                galleryViewBtn.addEventListener('click', () => {
+                    cameraScreen.classList.add('hidden');
+                    galleryScreen.classList.remove('hidden');
+                    galleryScreen.classList.add('fade-in');
+                });
+                cameraScreen.appendChild(galleryViewBtn);
+
+                listenForPhotos();
             }
 
-            // Обработчики событий
-            captureBtn.addEventListener('click', () => {
-                startCountdown();
-            });
+            // Запуск и настройка камеры
+            async function startCamera() {
+                // Скрываем старые ошибки, если они есть
+                messageBox.classList.add('hidden'); 
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+
+                try {
+                    // Пытаемся запустить камеру с текущими настройками
+                    currentStream = await getCameraStream(currentFacingMode);
+                } catch (err) {
+                    console.warn(`Не удалось запустить камеру '${currentFacingMode}'. Пробуем другую. Ошибка: ${err.name}`);
+                    const fallbackFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+                    try {
+                        // Если не получилось, пробуем запасной вариант
+                        currentStream = await getCameraStream(fallbackFacingMode);
+                        currentFacingMode = fallbackFacingMode; // Обновляем режим, если получилось
+                    } catch (fallbackErr) {
+                        console.error(`Не удалось запустить ни одну камеру. Ошибка: ${fallbackErr.name}`);
+                        handleCameraError(fallbackErr);
+                        return; // Выходим, если обе попытки провалились
+                    }
+                }
+                
+                // Если поток получен, показываем экран камеры
+                videoElement.srcObject = currentStream;
+                welcomeScreen.classList.add('hidden');
+                cameraScreen.classList.remove('hidden');
+                cameraScreen.classList.add('fade-in');
+                checkCameraSwitchAvailability();
+                setupZoomControls();
+            }
+            
+            // Вспомогательная функция для получения потока с камеры
+            function getCameraStream(facingMode) {
+                // Измененные ограничения для повышения производительности
+                const constraints = {
+                    video: {
+                        facingMode: { exact: facingMode },
+                        width: { ideal: 1280 }, 
+                        height: { ideal: 720 } 
+                    },
+                    audio: false
+                };
+                return navigator.mediaDevices.getUserMedia(constraints);
+            }
+            
+            // Обработка финальных ошибок камеры
+            function handleCameraError(err) {
+                let message = "Произошла неизвестная ошибка при доступе к камере.";
+                if (err.name === "NotAllowedError") {
+                    message = "Вы не разрешили доступ к камере. Пожалуйста, обновите страницу и предоставьте разрешение во всплывающем окне.";
+                } else if (err.name === "NotFoundError" || err.name === "OverconstrainedError" || err.name === "NotReadableError") {
+                    message = "Не удалось найти подходящую камеру на вашем устройстве. Убедитесь, что она не используется другим приложением.";
+                }
+                displayError(message);
+            }
+
+            // Отображение сообщения об ошибке на главном экране с помощью кастомного модального окна
+            function displayError(message) {
+                messageBoxText.textContent = message;
+                messageBox.classList.remove('hidden');
+                welcomeScreen.classList.remove('hidden');
+                cameraScreen.classList.add('hidden');
+            }
+
+            // Проверка возможности переключения камеры
+            async function checkCameraSwitchAvailability() {
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoInputs = devices.filter(device => device.kind === 'videoinput');
+                    if (videoInputs.length > 1) {
+                        switchCameraBtn.classList.remove('hidden');
+                    } else {
+                        switchCameraBtn.classList.add('hidden');
+                    }
+                } catch(e) {
+                    console.error("Не удалось получить список устройств", e);
+                    switchCameraBtn.classList.add('hidden');
+                }
+            }
+
+            // Переключение между камерами
+            function switchCamera() {
+                currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+                console.log(`Переключение камеры на: ${currentFacingMode}`);
+                startCamera();
+            }
+
+            // Настройка управления зумом
+            function setupZoomControls() {
+                const videoTrack = currentStream.getVideoTracks()[0];
+                const capabilities = videoTrack.getCapabilities();
+                
+                if (capabilities.zoom) {
+                    supportsZoom = true;
+                    minZoom = capabilities.zoom.min;
+                    maxZoom = capabilities.zoom.max;
+                    currentZoom = capabilities.zoom.current;
+
+                    zoomSlider.min = minZoom;
+                    zoomSlider.max = maxZoom;
+                    zoomSlider.step = capabilities.zoom.step || 0.1;
+                    zoomSlider.value = currentZoom;
+                    zoomControls.classList.remove('hidden');
+
+                    zoomSlider.addEventListener('input', (e) => {
+                        applyZoom(parseFloat(e.target.value));
+                    });
+
+                    // Обработчики для pinch-to-zoom на мобильных
+                    videoElement.addEventListener('touchstart', handleTouchStart, false);
+                    videoElement.addEventListener('touchmove', handleTouchMove, false);
+                } else {
+                    supportsZoom = false;
+                    zoomControls.classList.add('hidden');
+                }
+            }
+
+            // Функция для применения зума
+            function applyZoom(zoomValue) {
+                if (supportsZoom) {
+                    currentZoom = Math.max(minZoom, Math.min(maxZoom, zoomValue));
+                    const videoTrack = currentStream.getVideoTracks()[0];
+                    videoTrack.applyConstraints({ advanced: [{ zoom: currentZoom }] })
+                        .catch(e => console.error("Не удалось применить зум", e));
+                    zoomSlider.value = currentZoom; // Обновляем ползунок, если зум меняется от жеста
+                }
+            }
+
+            // Обработчик начала касания для pinch-to-zoom
+            function handleTouchStart(event) {
+                if (event.touches.length === 2) {
+                    initialPinchDistance = getPinchDistance(event.touches);
+                } else {
+                    initialPinchDistance = null;
+                }
+            }
+
+            // Обработчик движения пальцев для pinch-to-zoom
+            function handleTouchMove(event) {
+                if (event.touches.length === 2 && initialPinchDistance !== null) {
+                    const newPinchDistance = getPinchDistance(event.touches);
+                    const zoomChange = newPinchDistance / initialPinchDistance;
+                    const newZoom = currentZoom * zoomChange;
+                    
+                    applyZoom(newZoom);
+                    initialPinchDistance = newPinchDistance;
+                }
+            }
+
+            // Вспомогательная функция для расчета расстояния между пальцами
+            function getPinchDistance(touches) {
+                const dx = touches[0].clientX - touches[1].clientX;
+                const dy = touches[0].clientY - touches[1].clientY;
+                return Math.sqrt(dx * dx + dy * dy);
+            }
+
+            // Функция "Сделать фото"
+            async function takePhoto() {
+                if (photosTaken >= PHOTO_LIMIT) {
+                    messageBoxText.textContent = 'Вы достигли лимита в 25 фотографий!';
+                    messageBox.classList.remove('hidden');
+                    return;
+                }
+
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+                // Добавление водяного знака
+                const watermarkText = `${userName} Илья Алина 28.08.2025`;
+                context.font = '30px Inter, sans-serif'; 
+                context.fillStyle = 'white';
+                context.globalAlpha = 0.5; 
+                context.textAlign = 'right';
+                context.textBaseline = 'bottom';
+                context.fillText(watermarkText, canvas.width - 20, canvas.height - 20);
+                context.globalAlpha = 1.0; 
+
+                const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+
+                // Загружаем фото в Firestore
+                try {
+                    const docRef = window.firestore.doc(db, `/artifacts/${appId}/public/data/photos`, `photo_${Date.now()}`);
+                    await window.firestore.setDoc(docRef, {
+                        imageDataUrl: imageDataUrl,
+                        userName: userName,
+                        createdAt: window.firestore.serverTimestamp()
+                    });
+                    console.log("Фото успешно загружено в Firestore!");
+                } catch (e) {
+                    console.error("Ошибка при добавлении документа: ", e);
+                    messageBoxText.textContent = "Ошибка при загрузке фото. Пожалуйста, попробуйте снова.";
+                    messageBox.classList.remove('hidden');
+                }
+
+                // Показываем уведомление
+                showNotification(messages[photosTaken]);
+                
+                photosTaken++;
+                localStorage.setItem('weddingPhotosTakenCount', photosTaken);
+                updatePhotoCounter();
+            }
+
+            // Функция для показа уведомления
+            function showNotification(message) {
+                notificationMessageEl.textContent = message;
+                notificationPopup.classList.add('show');
+                playSound(); 
+                setTimeout(() => {
+                    notificationPopup.classList.remove('show');
+                }, 4000);
+            }
+
+            // Функция для воспроизведения звука
+            function playSound() {
+                try {
+                    notificationSound.currentTime = 0; 
+                    notificationSound.play().catch(e => {
+                        console.warn("Не удалось воспроизвести звук. Возможно, из-за ограничений браузера на автовоспроизведение.", e);
+                    });
+                } catch(e) {
+                    console.error("Ошибка при воспроизведении звука: ", e);
+                }
+            }
+
+            // Обновление счетчика на экране
+            function updatePhotoCounter() {
+                const remaining = PHOTO_LIMIT - photosTaken;
+                photoCounterEl.textContent = remaining;
+                if (remaining <= 0) {
+                    takePhotoBtn.disabled = true;
+                    takePhotoBtn.style.backgroundColor = '#ccc';
+                    takePhotoBtn.style.cursor = 'not-allowed';
+                }
+            }
+
+            // Добавление фото в общую галерею
+            function displayPhotoInCommonGallery(photoData) {
+                const photoWrapper = document.createElement('div');
+                photoWrapper.className = 'gallery-photo-item';
+                photoWrapper.style.backgroundImage = `url('${photoData.imageDataUrl}')`;
+
+                const watermark = document.createElement('div');
+                watermark.className = 'watermark-text';
+                watermark.textContent = photoData.userName;
+                
+                photoWrapper.appendChild(watermark);
+
+                photoWrapper.addEventListener('click', () => {
+                    fullSizePhoto.src = photoData.imageDataUrl;
+                    photoViewerModal.classList.remove('hidden');
+                });
+                
+                commonGalleryContainer.prepend(photoWrapper);
+            }
+
+            // Слушаем изменения в базе данных
+            function listenForPhotos() {
+                if (!db || !auth.currentUser) {
+                    console.error("Firestore или аутентификация не инициализированы.");
+                    return;
+                }
+
+                const photosColRef = window.firestore.collection(db, `/artifacts/${appId}/public/data/photos`);
+                
+                window.firestore.onSnapshot(photosColRef, (snapshot) => {
+                    // Очищаем галерею, чтобы избежать дубликатов
+                    commonGalleryContainer.innerHTML = '';
+                    snapshot.forEach(doc => {
+                        const photo = doc.data();
+                        displayPhotoInCommonGallery(photo);
+                    });
+                });
+            }
+
+            // Запускаем приложение
+            init();
         });
     </script>
 </body>
