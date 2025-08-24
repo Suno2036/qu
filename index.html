@@ -342,15 +342,17 @@
             let photosTaken = parseInt(localStorage.getItem('weddingPhotosTakenCount') || '0');
             let db, auth, userId;
             
-            // Получаем Firebase-конфигурацию и id приложения из переменных окружения
-            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+            // Firebase-конфигурация. Используем конфигурацию, предоставленную средой, чтобы обеспечить
+            // совместимость с токеном аутентификации.
+            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
             // --- Функции ---
 
             // Инициализация приложения и Firebase
             async function init() {
-                if (!firebaseConfig) {
+                if (!firebaseConfig || Object.keys(firebaseConfig).length === 0) {
                     messageBoxText.textContent = "Ошибка: конфигурация Firebase не найдена. Пожалуйста, убедитесь, что приложение запущено в корректной среде.";
                     messageBox.classList.remove('hidden');
                     return;
